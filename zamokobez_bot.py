@@ -68,9 +68,41 @@ def load_user_data(user_id):
     return data[user_str], sha
 
 def save_user_data(user_id, user_data_entry, sha):
-    all_data, _ = get_github_file()
-    all_data[str(user_id)] = user_data_entry
-    update_github_file(all_data, sha)
+    print(f"[SAVE] Начинаю сохранение для user_id={user_id}")
+    try:
+        # Получаем все текущие данные из файла
+        all_data, current_sha = get_github_file()
+        print(f"[SAVE] Текущие данные с GitHub: {all_data}")
+        print(f"[SAVE] Текущий SHA файла: {current_sha}")
+
+        # Обновляем данные для текущего пользователя
+        all_data[str(user_id)] = user_data_entry
+        print(f"[SAVE] Новые данные для записи: {all_data}")
+
+        # Подготавливаем содержимое для записи на GitHub
+        content_str = json.dumps(all_data, indent=2, ensure_ascii=False)
+        content_b64 = base64.b64encode(content_str.encode()).decode()
+        payload = {
+            "message": f"Update stats for user {user_id} at {datetime.now()}",
+            "content": content_b64,
+            "branch": "main"
+        }
+        # Если файл уже существует, добавляем его SHA в запрос
+        if current_sha:
+            payload["sha"] = current_sha
+            print(f"[SAVE] Использую SHA файла: {current_sha}")
+
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        response = requests.put(GITHUB_API_URL, headers=headers, json=payload)
+
+        print(f"[SAVE] Статус ответа от GitHub API: {response.status_code}")
+        if response.status_code in [200, 201]:
+            print(f"[SAVE] ✅ Успешно! Данные сохранены.")
+        else:
+            print(f"[SAVE] ❌ Ошибка! Ответ GitHub: {response.text}")
+
+    except Exception as e:
+        print(f"[SAVE] ❌ Критическая ошибка: {e}")
 
 def reset_user_today_if_needed(user_data_entry):
     today = datetime.now().strftime("%Y-%m-%d")
