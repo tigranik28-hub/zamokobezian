@@ -14,7 +14,7 @@ TOKEN = "8400621308:AAESj1JppPadskgEW9HFxZX1AusrqwDun_4"
 bot = telebot.TeleBot(TOKEN)
 
 # === GitHub ===
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "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")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "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")
 REPO_OWNER = os.environ.get("REPO_OWNER", "tigranik28-hub")
 REPO_NAME = os.environ.get("REPO_NAME", "zamokobezian")
 FILE_PATH = "main/user_stats.json"  # папка на GitHub
