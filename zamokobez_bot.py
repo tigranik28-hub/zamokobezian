@@ -119,10 +119,6 @@ if __name__ == "__main__":
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
     scheduler_thread.start()
 
-    @bot.message_handler(commands=['healthcheck'])
-def healthcheck_command(message):
-    bot.reply_to(message, "OK")
-    
     # Запускаем бота
     print("Бот запущен!")
     bot.infinity_polling()
