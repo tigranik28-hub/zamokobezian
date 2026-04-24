@@ -8,6 +8,7 @@ import json
 import requests
 import base64
 import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # === Telegram ===
 TOKEN = "8400621308:AAESj1JppPadskgEW9HFxZX1AusrqwDun_4"
@@ -15,12 +16,13 @@ bot = telebot.TeleBot(TOKEN)
 
 # === GitHub ===
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "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")
-REPO_OWNER = os.environ.get("REPO_OWNER", "pdf")
+REPO_OWNER = os.environ.get("REPO_OWNER", "tigranik28-hub")
 REPO_NAME = os.environ.get("REPO_NAME", "zamokobezian")
 FILE_PATH = "user_stats.json"  # папка на GitHub
+
 GITHUB_API_URL = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}"
 
-# === Работа с GitHub ===
+# ================= РАБОТА С GITHUB =================
 def get_github_file():
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     response = requests.get(GITHUB_API_URL, headers=headers)
@@ -32,12 +34,12 @@ def get_github_file():
     elif response.status_code == 404:
         return {}, None
     else:
-        print(f"Ошибка GitHub чтение: {response.status_code}")
+        print(f"[GitHub] Ошибка чтения: {response.status_code}")
         return {}, None
 
 def update_github_file(data, sha=None):
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    content_str = json.dumps(data, indent=2)
+    content_str = json.dumps(data, indent=2, ensure_ascii=False)
     content_b64 = base64.b64encode(content_str.encode()).decode()
     payload = {
         "message": f"Update stats {datetime.now().isoformat()}",
@@ -47,10 +49,10 @@ def update_github_file(data, sha=None):
     if sha:
         payload["sha"] = sha
     response = requests.put(GITHUB_API_URL, headers=headers, json=payload)
-    if response.status_code in [200, 201]:
-        print("GitHub обновлён")
+    if response.status_code in (200, 201):
+        print("[GitHub] Сохранено успешно")
     else:
-        print(f"Ошибка GitHub записи: {response.status_code}")
+        print(f"[GitHub] Ошибка записи: {response.status_code} - {response.text}")
 
 def load_user_data(user_id):
     data, sha = get_github_file()
@@ -72,12 +74,12 @@ def save_user_data(user_id, user_data_entry, sha):
 
 def reset_user_today_if_needed(user_data_entry):
     today = datetime.now().strftime("%Y-%m-%d")
-    if user_data_entry["today_date"] != today:
+    if user_data_entry.get("today_date") != today:
         user_data_entry["today_posts"] = 0
         user_data_entry["today_date"] = today
     return user_data_entry
 
-# === Меню ===
+# ================= ТЕЛЕГРАМ МЕНЮ =================
 def get_main_menu():
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     btn1 = KeyboardButton("📝 Отметить пост")
@@ -86,7 +88,9 @@ def get_main_menu():
     markup.add(btn1, btn2, btn3)
     return markup
 
-# === Команды и кнопки меню ===
+# ================= КОМАНДЫ И CALLBACK =================
+bot = telebot.TeleBot(TOKEN)
+
 @bot.message_handler(commands=['start'])
 def start_command(message):
     user_id = message.chat.id
@@ -106,15 +110,15 @@ def mark_post(message):
     user_id = message.chat.id
     user_data_entry, sha = load_user_data(user_id)
     user_data_entry = reset_user_today_if_needed(user_data_entry)
-    
+
     if user_data_entry["today_posts"] >= 2:
-        bot.reply_to(message, "✅ Ты уже сделал два поста сегодня! Завтра новый день.", reply_markup=get_main_menu())
+        bot.reply_to(message, "✅ Ты уже сделал два поста сегодня! Жди завтрашнего дня.", reply_markup=get_main_menu())
         return
-    
+
     user_data_entry["today_posts"] += 1
     user_data_entry["total_posts"] += 1
     save_user_data(user_id, user_data_entry, sha)
-    
+
     remaining = 2 - user_data_entry["today_posts"]
     if remaining == 0:
         bot.reply_to(message, "🎉 Отлично! Оба поста сделаны. Напоминания прекращены до завтра.", reply_markup=get_main_menu())
@@ -141,22 +145,54 @@ def today_stats(message):
 def fallback(message):
     bot.reply_to(message, "Пожалуйста, используй кнопки меню.", reply_markup=get_main_menu())
 
-# === Напоминания и сброс ===
+# ================= ИНЛАЙН-КНОПКА В НАПОМИНАНИЯХ =================
+@bot.callback_query_handler(func=lambda call: call.data == "post_done")
+def handle_post_done(call):
+    user_id = call.from_user.id
+    user_data_entry, sha = load_user_data(user_id)
+    user_data_entry = reset_user_today_if_needed(user_data_entry)
+
+    if user_data_entry["today_posts"] >= 2:
+        bot.answer_callback_query(call.id, "Сегодня уже два поста!", show_alert=False)
+        return
+
+    user_data_entry["today_posts"] += 1
+    user_data_entry["total_posts"] += 1
+    save_user_data(user_id, user_data_entry, sha)
+
+    remaining = 2 - user_data_entry["today_posts"]
+    bot.answer_callback_query(call.id, f"Пост отмечен! Осталось {remaining}.")
+
+    if remaining == 0:
+        bot.edit_message_text("✅ Оба поста сделаны! Молодец.", chat_id=call.message.chat.id, message_id=call.message.message_id)
+        bot.send_message(user_id, "🎉 Сегодня всё. Завтра новый день.", reply_markup=get_main_menu())
+    else:
+        bot.edit_message_text(f"✅ Пост отмечен! Осталось сегодня: {remaining}",
+                              chat_id=call.message.chat.id, message_id=call.message.message_id)
+
+# ================= НАПОМИНАНИЯ ПО ЧАСАМ И СБРОС =================
 def send_reminder_to_user(user_id):
     user_data_entry, _ = load_user_data(user_id)
     user_data_entry = reset_user_today_if_needed(user_data_entry)
     if user_data_entry["today_posts"] < 2:
         markup = InlineKeyboardMarkup()
         markup.add(InlineKeyboardButton("📝 Пост сделан", callback_data="post_done"))
-        bot.send_message(user_id, "⏰ Напоминание: нужно сделать два поста в канал.", reply_markup=markup)
+        try:
+            bot.send_message(user_id, "⏰ Напоминание: нужно сделать два поста в канал.", reply_markup=markup)
+        except Exception as e:
+            print(f"Ошибка отправки напоминания {user_id}: {e}")
 
 def periodic_reminders():
     data, _ = get_github_file()
-    for user_id_str in data.keys():
+    for user_id_str, entry in data.items():
+        # не отправляем если пользователь уже сделал 2 поста сегодня
+        today = datetime.now().strftime("%Y-%m-%d")
+        if entry.get("today_date") == today and entry.get("today_posts", 0) >= 2:
+            continue
         try:
             send_reminder_to_user(int(user_id_str))
         except Exception as e:
-            print(f"Ошибка напоминания {user_id_str}: {e}")
+            print(f"Ошибка в periodic для {user_id_str}: {e}")
 
 def daily_reset():
     data, sha = get_github_file()
@@ -169,54 +205,48 @@ def daily_reset():
             changed = True
     if changed and sha:
         update_github_file(data, sha)
+        print("Ежедневный сброс выполнен")
+    elif changed:
+        print("Нет sha, пропускаю сброс")
 
 def run_scheduler():
     while True:
         schedule.run_pending()
         time.sleep(1)
 
-# === Callback для инлайн-кнопки ===
-@bot.callback_query_handler(func=lambda call: call.data == "post_done")
-def handle_post_done(call):
-    user_id = call.from_user.id
-    user_data_entry, sha = load_user_data(user_id)
-    user_data_entry = reset_user_today_if_needed(user_data_entry)
-    if user_data_entry["today_posts"] >= 2:
-        bot.answer_callback_query(call.id, "Сегодня уже два поста!")
-        return
-    user_data_entry["today_posts"] += 1
-    user_data_entry["total_posts"] += 1
-    save_user_data(user_id, user_data_entry, sha)
-    remaining = 2 - user_data_entry["today_posts"]
-    bot.answer_callback_query(call.id, f"Пост отмечен! Осталось {remaining}.")
-    bot.edit_message_text(f"✅ Пост отмечен. Осталось сегодня: {remaining}",
-                          chat_id=call.message.chat.id,
-                          message_id=call.message.message_id)
-    if remaining == 0:
-        bot.send_message(user_id, "🎉 Молодец! Оба поста готовы. До завтра.", reply_markup=get_main_menu())
-
-# === HTTP healthcheck для Render ===
-from http.server import HTTPServer, BaseHTTPRequestHandler
+# ================= HTTP HEALTHCHECK (с поддержкой HEAD) =================
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == '/healthcheck':
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b'OK')
-        else:
-            self.send_response(404)
-            self.end_headers()
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b'OK')
+
+    def do_HEAD(self):
+        # Поддержка HEAD-запросов (используется Render и некоторыми мониторами)
+        self.send_response(200)
+        self.end_headers()
+
+    def log_message(self, format, *args):
+        # Отключаем вывод каждого запроса в консоль (замусоривает логи)
+        pass
+
 def run_http_server():
     port = int(os.environ.get('PORT', 10000))
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
-    print(f"Healthcheck на порту {port}")
+    print(f"HTTP healthcheck сервер запущен на порту {port}")
     server.serve_forever()
 
-# === Запуск ===
+# ================= ЗАПУСК =================
 if __name__ == "__main__":
+    # Планировщик: каждый час и сброс в полночь
     schedule.every(1).hours.do(periodic_reminders)
     schedule.every().day.at("00:00").do(daily_reset)
+
+    # Поток планировщика
     threading.Thread(target=run_scheduler, daemon=True).start()
+    # Поток HTTP-сервера для healthcheck
     threading.Thread(target=run_http_server, daemon=True).start()
-    print("Бот запущен с меню и GitHub хранилищем")
+
+    print("Бот запущен. Меню активно, статистика хранится на GitHub.")
     bot.infinity_polling()
