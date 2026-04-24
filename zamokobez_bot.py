@@ -1,3 +1,8 @@
+print(f"GitHub URL: {GITHUB_API_URL}")
+print(f"Token starts: {GITHUB_TOKEN[:10]}...")
+headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+resp = requests.get("https://api.github.com/user", headers=headers)
+print(f"GitHub auth: {resp.status_code}")
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 import threading
