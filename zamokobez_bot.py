@@ -1,8 +1,3 @@
-print(f"GitHub URL: {GITHUB_API_URL}")
-print(f"Token starts: {GITHUB_TOKEN[:10]}...")
-headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-resp = requests.get("https://api.github.com/user", headers=headers)
-print(f"GitHub auth: {resp.status_code}")
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 import threading
@@ -13,6 +8,12 @@ import json
 import requests
 import base64
 import os
+
+print(f"GitHub URL: {GITHUB_API_URL}")
+print(f"Token starts: {GITHUB_TOKEN[:10]}...")
+headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+resp = requests.get("https://api.github.com/user", headers=headers)
+print(f"GitHub auth: {resp.status_code}")
 
 # === Telegram ===
 TOKEN = "8400621308:AAESj1JppPadskgEW9HFxZX1AusrqwDun_4"
